@@ -1,6 +1,6 @@
 # filesDiff
 
-Find repeated files recursively inside a folder and write a report to `result_log.txt`.
+Find repeated files recursively inside a folder, or files that exist in two folders, and write a report to `result_log.txt`.
 
 Two ways of finding repeated files:
 
@@ -12,7 +12,7 @@ Requires Python 3.8+. No extra packages needed.
 ## Usage
 
 ```bash
-python3 find_duplicates.py [folder] [-o OUTPUT] [--content] [--skip-empty]
+python3 find_duplicates.py [folder] [-o OUTPUT] [--content] [--skip-empty] [--compare FOLDER_B]
 ```
 
 | Option | Description |
@@ -21,6 +21,7 @@ python3 find_duplicates.py [folder] [-o OUTPUT] [--content] [--skip-empty]
 | `-o`, `--output` | Report file. Default: `result_log.txt` in the current directory |
 | `--content` | Compare file contents instead of name and size |
 | `--skip-empty` | Ignore empty (0-byte) files. Only applies with `--content` |
+| `--compare FOLDER_B` | Only report files found in both `folder` and `FOLDER_B`. Works with either matching mode |
 
 ### Examples
 
@@ -36,6 +37,9 @@ python3 find_duplicates.py ~/Pictures --content
 
 # Identical content, ignoring empty files
 python3 find_duplicates.py ~/Pictures --content --skip-empty
+
+# Files in ~/Pictures that already exist in the backup, by content
+python3 find_duplicates.py ~/Pictures --compare /Volumes/Backup/Pictures --content
 ```
 
 ## Report format
@@ -63,6 +67,28 @@ hash 0529418c2ac9aeab (200000000 bytes) - 2 locations
 ```
 
 If nothing is found, the report says `No duplicate files found.`
+
+## Comparing two folders
+
+With `--compare FOLDER_B`, only groups that have at least one file in each folder are reported. Duplicates that exist inside just one of the folders are left out. When a file is in both, every copy is listed, grouped by folder:
+
+```
+Files found in both folders (same name and size):
+  A: /path/to/Pictures
+  B: /path/to/Backup/Pictures
+Total duplicate groups: 1
+
+x.jpg (2048 bytes) - 3 locations
+  A:
+    /path/to/Pictures/2024/x.jpg
+    /path/to/Pictures/x.jpg
+  B:
+    /path/to/Backup/Pictures/x.jpg
+```
+
+Folder structure doesn't matter: a file can be in any subfolder of A and any subfolder of B. The two folders must not be the same, and one can't be inside the other. If nothing is in both, the report says `No files found in both folders.`
+
+With `--content`, files whose size exists in only one of the folders are never read, so comparing large folders stays fast.
 
 ## How content mode works
 

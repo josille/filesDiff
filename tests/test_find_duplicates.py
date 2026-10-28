@@ -209,6 +209,80 @@ class WriteReportTest(TempDirTestCase):
         self.assertNotIn(digest, text)
 
 
+class CompareFoldersTest(TempDirTestCase):
+    def setUp(self):
+        super().setUp()
+        self.a = self.root / "A"
+        self.b = self.root / "B"
+        self.a.mkdir()
+        self.b.mkdir()
+
+    def test_name_mode_reports_only_files_in_both(self):
+        a = self.make("A/x/file.txt", b"abc")
+        b = self.make("B/y/file.txt", b"xyz")
+        self.make("A/only_a.txt", b"1")
+        self.make("B/only_b.txt", b"1")
+        groups = fd.find_duplicates(self.a, compare=self.b)
+        self.assertEqual(groups, {("file.txt", 3): [a, b]})
+
+    def test_duplicates_inside_one_folder_are_ignored(self):
+        self.make("A/dup.txt", b"1")
+        self.make("A/sub/dup.txt", b"1")
+        self.make("B/other.txt", b"2")
+        self.assertEqual(fd.find_duplicates(self.a, compare=self.b), {})
+        self.assertEqual(fd.find_content_duplicates(self.a, compare=self.b, skip_empty=True), {})
+
+    def test_group_keeps_all_copies_when_in_both(self):
+        a1 = self.make("A/f.txt", b"1")
+        a2 = self.make("A/sub/f.txt", b"1")
+        b1 = self.make("B/f.txt", b"1")
+        self.assertEqual(fd.find_duplicates(self.a, compare=self.b), {("f.txt", 1): [a1, a2, b1]})
+
+    def test_content_mode_matches_different_names(self):
+        data = os.urandom(5 * fd.PARTIAL_BLOCK)
+        a = self.make("A/photo.jpg", data)
+        b = self.make("B/backup/copy_of_photo.jpg", data)
+        self.make("A/notes.txt", b"hello")
+        self.make("A/notes_copy.txt", b"hello")
+        groups = fd.find_content_duplicates(self.a, compare=self.b)
+        self.assertEqual(groups, {(hashlib.blake2b(data).hexdigest(), len(data)): [a, b]})
+
+    def test_content_mode_skips_hashing_sizes_only_in_one_folder(self):
+        self.make("A/big1.bin", os.urandom(5 * fd.PARTIAL_BLOCK))
+        self.make("A/big2.bin", os.urandom(5 * fd.PARTIAL_BLOCK))
+        self.make("B/small.bin", b"x")
+        with mock.patch.object(fd, "partial_hash", wraps=fd.partial_hash) as spy:
+            self.assertEqual(fd.find_content_duplicates(self.a, compare=self.b), {})
+        spy.assert_not_called()
+
+    def test_report_lists_paths_per_folder(self):
+        a = self.make("A/f.txt", b"1")
+        b = self.make("B/f.txt", b"1")
+        out = self.root / "r.txt"
+        groups = fd.find_duplicates(self.a, compare=self.b)
+        fd.write_report(self.a, groups, out, compare=self.b)
+        self.assertEqual(
+            out.read_text(encoding="utf-8"),
+            "Files found in both folders (same name and size):\n"
+            f"  A: {self.a}\n"
+            f"  B: {self.b}\n"
+            "Total duplicate groups: 1\n"
+            "\n"
+            "f.txt (1 bytes) - 2 locations\n"
+            "  A:\n"
+            f"    {a}\n"
+            "  B:\n"
+            f"    {b}\n",
+        )
+
+    def test_report_when_nothing_in_both(self):
+        out = self.root / "r.txt"
+        fd.write_report(self.a, {}, out, content=True, compare=self.b)
+        text = out.read_text(encoding="utf-8")
+        self.assertIn("Files found in both folders (same content):", text)
+        self.assertIn("No files found in both folders.", text)
+
+
 class CommandLineTest(TempDirTestCase):
     def run_script(self, *args):
         return subprocess.run(
@@ -248,6 +322,31 @@ class CommandLineTest(TempDirTestCase):
         result = self.run_script("does_not_exist")
         self.assertEqual(result.returncode, 2)
         self.assertIn("not a directory", result.stderr)
+
+    def test_compare_two_folders(self):
+        self.make("A/one.txt", b"same")
+        self.make("B/sub/two.txt", b"same")
+        self.make("A/dup.txt", b"inside A only")
+        self.make("A/sub/dup.txt", b"inside A only")
+        result = self.run_script("A", "--compare", "B", "--content")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Found 1 duplicate group(s)", result.stdout)
+        report = (self.root / "result_log.txt").read_text(encoding="utf-8")
+        self.assertIn("Files found in both folders (same content):", report)
+        self.assertNotIn("dup.txt", report)
+
+    def test_compare_missing_folder_is_an_error(self):
+        self.make("A/f.txt")
+        result = self.run_script("A", "--compare", "does_not_exist")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("not a directory", result.stderr)
+
+    def test_compare_overlapping_folders_is_an_error(self):
+        self.make("A/sub/f.txt")
+        for args in (("A", "--compare", "A"), ("A", "--compare", "A/sub"), ("A/sub", "--compare", "A")):
+            result = self.run_script(*args)
+            self.assertEqual(result.returncode, 2, args)
+            self.assertIn("must not be the same or inside each other", result.stderr)
 
 
 if __name__ == "__main__":
