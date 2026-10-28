@@ -282,16 +282,61 @@ def write_report(
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+HELP_EPILOG = """\
+matching modes:
+  name and size (default)
+      Files are repeated when they have the same file name and the same size.
+      Fast: no file is opened. Files with different names are never matched.
+  --content
+      Files are repeated when their bytes are identical, whatever their names.
+      Checked in steps, each only on files that passed the previous one:
+        1. same size
+        2. same first and last 64 KB (quick check)
+        3. same BLAKE2b hash of the whole file (read in 1 MB chunks)
+
+examples:
+  # scan ./test, report to result_log.txt
+  %(prog)s
+  # same name and size anywhere in ~/Pictures, report to dupes.txt
+  %(prog)s ~/Pictures -o dupes.txt
+  # identical content with any name, ignoring empty files, with progress bars
+  %(prog)s ~/Pictures --content --skip-empty --progress
+  # files in ~/Pictures that already exist in the backup, by content
+  %(prog)s ~/Pictures --compare /Volumes/Backup/Pictures --content
+
+The report file is never counted as a duplicate, even inside the scanned folder.
+Symbolic links and unreadable files are skipped.
+"""
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("folder", nargs="?", default="test", help="folder to scan (default: test)")
-    parser.add_argument("-o", "--output", default="result_log.txt", help="report file (default: result_log.txt)")
-    parser.add_argument("--content", action="store_true", help="compare file contents instead of name and size")
-    parser.add_argument("--skip-empty", action="store_true", help="ignore empty files (with --content)")
-    parser.add_argument(
-        "--compare", metavar="FOLDER_B", help="only report files found in both folder and FOLDER_B"
+    parser = argparse.ArgumentParser(
+        description=__doc__, epilog=HELP_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--progress", action="store_true", help="show a progress bar on stderr for each step")
+    parser.add_argument(
+        "folder", nargs="?", default="test", help="folder to scan recursively (default: test)"
+    )
+    parser.add_argument(
+        "-o", "--output", default="result_log.txt",
+        help="file the report is written to, overwritten if it exists (default: result_log.txt)",
+    )
+    parser.add_argument(
+        "--content", action="store_true",
+        help="match files by identical content instead of name and size (see matching modes)",
+    )
+    parser.add_argument(
+        "--skip-empty", action="store_true",
+        help="ignore 0-byte files, which would otherwise all match each other (only with --content)",
+    )
+    parser.add_argument(
+        "--compare", metavar="FOLDER_B",
+        help="only report files found in both folder and FOLDER_B; duplicates inside just one "
+        "of them are left out. The folders must not be the same or inside each other",
+    )
+    parser.add_argument(
+        "--progress", action="store_true",
+        help="show a progress bar on stderr while listing, checking and hashing files",
+    )
     args = parser.parse_args()
 
     root = Path(args.folder)

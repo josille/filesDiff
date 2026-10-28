@@ -12,8 +12,10 @@ Requires Python 3.8+. No extra packages needed.
 ## Usage
 
 ```bash
-python3 find_duplicates.py [folder] [-o OUTPUT] [--content] [--skip-empty] [--compare FOLDER_B]
+python3 find_duplicates.py [folder] [-o OUTPUT] [--content] [--skip-empty] [--compare FOLDER_B] [--progress]
 ```
+
+Run `python3 find_duplicates.py --help` (or `-h`) to see every option, how the matching modes work, and examples.
 
 | Option | Description |
 |---|---|
@@ -22,6 +24,8 @@ python3 find_duplicates.py [folder] [-o OUTPUT] [--content] [--skip-empty] [--co
 | `--content` | Compare file contents instead of name and size |
 | `--skip-empty` | Ignore empty (0-byte) files. Only applies with `--content` |
 | `--compare FOLDER_B` | Only report files found in both `folder` and `FOLDER_B`. Works with either matching mode |
+| `--progress` | Show a progress bar on stderr while listing, checking and hashing files |
+| `-h`, `--help` | Show the options, matching modes and examples, then exit |
 
 ### Examples
 
@@ -35,8 +39,8 @@ python3 find_duplicates.py ~/Pictures -o pictures_log.txt
 # Identical content, even when the names differ
 python3 find_duplicates.py ~/Pictures --content
 
-# Identical content, ignoring empty files
-python3 find_duplicates.py ~/Pictures --content --skip-empty
+# Identical content, ignoring empty files, with progress bars
+python3 find_duplicates.py ~/Pictures --content --skip-empty --progress
 
 # Files in ~/Pictures that already exist in the backup, by content
 python3 find_duplicates.py ~/Pictures --compare /Volumes/Backup/Pictures --content
@@ -96,7 +100,20 @@ Each check only runs on the files that passed the previous one, so large files a
 
 1. **Same size.** Instant, no file is read.
 2. **Same first and last 64 KB.** Reads only 128 KB per file.
-3. **Same full content (BLAKE2b hash).** Reads the whole file in 1 MB chunks, so memory use stays around 1 MB even for 1 GB files. Files of 100 MB or more show a progress percentage in the terminal.
+3. **Same full content (BLAKE2b hash).** Reads the whole file in 1 MB chunks, so memory use stays around 1 MB even for 1 GB files. Without `--progress`, files of 100 MB or more still show their own progress percentage in the terminal.
+
+## Progress
+
+With `--progress`, each step shows a bar on stderr, so the report and the final summary line on stdout are unaffected. The quick check and full compare steps only run with `--content`:
+
+```
+Listing: 12,480 entries
+Checking [##############################] 100% (12,480 entries / 12,480 entries)
+Quick check [##############################] 100% (310 files / 310 files)
+Full compare [###############...............]  50% (1.2 GB / 2.4 GB)
+```
+
+In a terminal the line is redrawn in place. When stderr is redirected to a file, a line is written every 10% instead, so logs stay readable.
 
 ## Running the tests
 
