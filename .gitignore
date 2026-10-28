@@ -1,2 +1,6 @@
 test/
 result_log.txt
+__pycache__/
+*.pyc
+.venv/
+.idea/

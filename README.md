@@ -7,7 +7,7 @@ Two ways of finding repeated files:
 - **Name + size** (default): files with the same file name and the same size.
 - **Content** (`--content`): files with exactly the same bytes, whatever their names are.
 
-Requires Python 3.12+. No extra packages needed.
+Requires Python 3.8+. No extra packages needed.
 
 ## Usage
 
@@ -71,6 +71,16 @@ Each check only runs on the files that passed the previous one, so large files a
 1. **Same size.** Instant, no file is read.
 2. **Same first and last 64 KB.** Reads only 128 KB per file.
 3. **Same full content (BLAKE2b hash).** Reads the whole file in 1 MB chunks, so memory use stays around 1 MB even for 1 GB files. Files of 100 MB or more show a progress percentage in the terminal.
+
+## Running the tests
+
+The tests use Python's built-in `unittest` module, so there's nothing to install. From the project folder:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+They create their own temporary files and don't touch the `test/` folder. `pytest` also works if you have it installed.
 
 ## Notes
 

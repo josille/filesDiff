@@ -4,6 +4,8 @@ Default mode groups files by name and size. With --content, files are grouped by
 their actual content (same bytes, any name): size -> partial hash -> full hash.
 """
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import sys
